@@ -9,6 +9,7 @@ import base64
 from PIL import Image
 import time
 import copy
+import threading
 
 # Title and introduction
 st.title('Celestial Body Simulator')
@@ -695,6 +696,12 @@ def main():
         
     if 'current_frame' not in st.session_state:
         st.session_state.current_frame = 0
+        
+    if 'animation_playing' not in st.session_state:
+        st.session_state.animation_playing = False
+        
+    if 'animation_speed' not in st.session_state:
+        st.session_state.animation_speed = 100  # milliseconds between frames
     
     # Scenario selection
     scenario = st.sidebar.radio(
@@ -736,6 +743,7 @@ def main():
         # Reset animation frames
         st.session_state.animation_frames = None
         st.session_state.current_frame = 0
+        st.session_state.animation_playing = False
         
         # Update current scenario
         st.session_state.current_scenario = scenario_map[scenario]
@@ -797,6 +805,7 @@ def main():
             # Reset animation frames
             st.session_state.animation_frames = None
             st.session_state.current_frame = 0
+            st.session_state.animation_playing = False
     
     # Body parameters display and editing
     st.subheader('Body Parameters')
@@ -915,6 +924,7 @@ def main():
     
     with col2:
         interval = st.number_input('Frame Interval (ms)', min_value=10, max_value=500, value=50, key='interval')
+        st.session_state.animation_speed = interval
     
     # Generate animation button
     if st.button('Generate Animation', key='generate_animation'):
@@ -931,6 +941,7 @@ def main():
             
             # Reset current frame
             st.session_state.current_frame = 0
+            st.session_state.animation_playing = False
             
             # Restore original state
             if current_running:
@@ -944,16 +955,29 @@ def main():
     if st.session_state.animation_frames:
         st.subheader("Animation Player")
         
-        # Create columns for animation controls
-        anim_col1, anim_col2, anim_col3 = st.columns([1, 6, 1])
+        # Create animation container
+        animation_container = st.container()
         
-        # Play/Pause buttons
+        # Create columns for animation controls
+        anim_col1, anim_col2, anim_col3, anim_col4 = st.columns([1, 1, 4, 1])
+        
+        # Previous frame button
         with anim_col1:
             if st.button("◀", key="prev_frame"):
+                st.session_state.animation_playing = False
                 st.session_state.current_frame = max(0, st.session_state.current_frame - 1)
         
-        # Frame slider
+        # Play/Pause button
         with anim_col2:
+            if st.session_state.animation_playing:
+                if st.button("⏸", key="pause_animation"):
+                    st.session_state.animation_playing = False
+            else:
+                if st.button("▶", key="play_animation"):
+                    st.session_state.animation_playing = True
+        
+        # Frame slider
+        with anim_col3:
             st.session_state.current_frame = st.slider(
                 "Frame", 
                 min_value=0, 
@@ -963,12 +987,45 @@ def main():
             )
         
         # Next frame button
-        with anim_col3:
+        with anim_col4:
             if st.button("▶", key="next_frame"):
+                st.session_state.animation_playing = False
                 st.session_state.current_frame = min(len(st.session_state.animation_frames) - 1, st.session_state.current_frame + 1)
         
+        # Animation speed control
+        st.slider(
+            "Animation Speed", 
+            min_value=10, 
+            max_value=500, 
+            value=st.session_state.animation_speed,
+            key="animation_speed_slider",
+            help="Milliseconds between frames (lower is faster)"
+        )
+        
         # Display current frame
-        st.image(st.session_state.animation_frames[st.session_state.current_frame], use_column_width=True)
+        with animation_container:
+            st.image(st.session_state.animation_frames[st.session_state.current_frame], use_container_width=True)
+        
+        # Auto-advance frame if animation is playing
+        if st.session_state.animation_playing:
+            # Use a JavaScript hack to auto-refresh the page
+            autorefresh_rate_ms = st.session_state.animation_speed
+            next_frame = (st.session_state.current_frame + 1) % len(st.session_state.animation_frames)
+            
+            # Create JavaScript to update the frame
+            js_code = f"""
+            <script>
+                function nextFrame() {{
+                    var slider = document.querySelector('div[data-testid="stSlider"] input[type="range"]');
+                    if (slider) {{
+                        slider.value = {next_frame};
+                        slider.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    }}
+                }}
+                setTimeout(nextFrame, {autorefresh_rate_ms});
+            </script>
+            """
+            st.components.v1.html(js_code, height=0)
         
         # Create a GIF from frames
         if st.button("Create Downloadable GIF", key="create_gif"):
@@ -993,6 +1050,14 @@ def main():
                     mime="image/gif",
                     key='download_gif'
                 )
+                
+                # Display the GIF directly
+                st.markdown("### Preview of Downloadable GIF")
+                st.markdown(
+                    f'<img src="data:image/gif;base64,{base64.b64encode(gif_buf.getvalue()).decode()}" alt="Animation GIF" style="width:100%;">',
+                    unsafe_allow_html=True
+                )
+    
     
     # Footer
     st.markdown('---')
