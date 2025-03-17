@@ -9,17 +9,17 @@ import base64
 from PIL import Image
 import time
 
-# タイトルとイントロダクション
-st.title('天体シミュレーター')
+# Title and introduction
+st.title('Celestial Body Simulator')
 st.markdown("""
-このアプリケーションは、ニュートンの運動法則と万有引力の法則に基づいて天体の動きや位置関係をシミュレーションするためのツールです。
-太陽系の惑星運動から連星系、三体問題まで、様々な天体現象を視覚的に体験できます。
+This application simulates the movement and positions of celestial bodies based on Newton's laws of motion and the law of universal gravitation.
+You can visualize various celestial phenomena from the solar system to binary star systems and three-body problems.
 """)
 
-# サイドバーの作成
-st.sidebar.header('シミュレーション設定')
+# Create sidebar
+st.sidebar.header('Simulation Settings')
 
-# 色名をHEX形式に変換する辞書
+# Color name to HEX format conversion dictionary
 COLOR_MAP = {
     'red': '#FF0000',
     'green': '#00FF00',
@@ -32,162 +32,162 @@ COLOR_MAP = {
     'black': '#000000'
 }
 
-# 天体クラスの定義
+# Celestial body class definition
 class CelestialBody:
-    """天体オブジェクトを表すクラス"""
+    """Class representing a celestial object"""
     
     def __init__(self, name, mass, radius, position, velocity, color):
         """
-        パラメータ:
-        name (str): 天体の名前
-        mass (float): 天体の質量 (kg)
-        radius (float): 天体の半径 (m)
-        position (array): 初期位置 [x, y, z] (m)
-        velocity (array): 初期速度 [vx, vy, vz] (m/s)
-        color (str): 天体の色
+        Parameters:
+        name (str): Name of the celestial body
+        mass (float): Mass of the body (kg)
+        radius (float): Radius of the body (m)
+        position (array): Initial position [x, y, z] (m)
+        velocity (array): Initial velocity [vx, vy, vz] (m/s)
+        color (str): Color of the body
         """
         self.name = name
-        self.mass = mass
-        self.radius = radius
-        self.position = np.array(position, dtype=float)
-        self.velocity = np.array(velocity, dtype=float)
-        self.acceleration = np.zeros(3)
-        # 色名をHEX形式に変換
+        self.mass = float(mass)  # Ensure mass is float
+        self.radius = float(radius)  # Ensure radius is float
+        self.position = np.array(position, dtype=np.float64)  # Ensure position is float64
+        self.velocity = np.array(velocity, dtype=np.float64)  # Ensure velocity is float64
+        self.acceleration = np.zeros(3, dtype=np.float64)  # Ensure acceleration is float64
+        # Convert color name to HEX format
         self.color = COLOR_MAP.get(color, color) if isinstance(color, str) else color
         self.trajectory = [np.copy(self.position)]
         self.initial_position = np.copy(position)
         self.initial_velocity = np.copy(velocity)
         
     def update_trajectory(self):
-        """現在位置を軌道履歴に追加"""
+        """Add current position to trajectory history"""
         self.trajectory.append(np.copy(self.position))
         
     def reset(self):
-        """天体の位置と速度を初期状態に戻す"""
+        """Reset body position and velocity to initial state"""
         self.position = np.copy(self.initial_position)
         self.velocity = np.copy(self.initial_velocity)
-        self.acceleration = np.zeros(3)
+        self.acceleration = np.zeros(3, dtype=np.float64)
         self.trajectory = [np.copy(self.position)]
         
     def __str__(self):
         return f"{self.name}: mass={self.mass}kg, position={self.position}m, velocity={self.velocity}m/s"
 
-# 物理エンジンの定義
+# Physics engine definition
 class PhysicsEngine:
-    """天体の物理計算を行うエンジン"""
+    """Engine for physical calculations of celestial bodies"""
     
     def __init__(self, dt=86400, G=6.67430e-11):
         """
-        パラメータ:
-        dt (float): 時間ステップ (秒)
-        G (float): 万有引力定数 (m^3 kg^-1 s^-2)
+        Parameters:
+        dt (float): Time step (seconds)
+        G (float): Gravitational constant (m^3 kg^-1 s^-2)
         """
-        self.dt = dt
-        self.G = G
-        self.initial_dt = dt
-        self.initial_G = G
+        self.dt = float(dt)  # Ensure dt is float
+        self.G = float(G)  # Ensure G is float
+        self.initial_dt = float(dt)
+        self.initial_G = float(G)
         
     def calculate_acceleration(self, bodies):
         """
-        全天体間の重力による加速度を計算
+        Calculate acceleration due to gravity between all bodies
         
-        パラメータ:
-        bodies (list): CelestialBodyオブジェクトのリスト
+        Parameters:
+        bodies (list): List of CelestialBody objects
         """
-        # 全天体の加速度をゼロにリセット
+        # Reset acceleration for all bodies
         for body in bodies:
-            body.acceleration = np.zeros(3)
+            body.acceleration = np.zeros(3, dtype=np.float64)
         
-        # 全天体ペアの重力相互作用を計算
+        # Calculate gravitational interaction for all body pairs
         for i, body1 in enumerate(bodies):
             for body2 in bodies[i+1:]:
-                # 2天体間のベクトルと距離を計算
+                # Calculate vector and distance between two bodies
                 r_vec = body2.position - body1.position
                 r = np.linalg.norm(r_vec)
                 
-                # 距離がゼロの場合（衝突など）はスキップ
+                # Skip if distance is zero (collision, etc.)
                 if r == 0:
                     continue
                 
-                # 万有引力の法則に基づく加速度を計算
+                # Calculate acceleration based on the law of universal gravitation
                 # F = G * m1 * m2 / r^2
                 # a1 = F / m1 = G * m2 / r^2
                 # a2 = F / m2 = G * m1 / r^2
                 force_mag = self.G * body1.mass * body2.mass / (r * r)
                 
-                # 単位ベクトルを計算
+                # Calculate unit vector
                 r_hat = r_vec / r
                 
-                # 各天体の加速度を更新（作用・反作用の法則）
-                body1.acceleration += force_mag / body1.mass * r_hat
-                body2.acceleration -= force_mag / body2.mass * r_hat
+                # Update acceleration for each body (action-reaction principle)
+                body1.acceleration += (force_mag / body1.mass) * r_hat
+                body2.acceleration -= (force_mag / body2.mass) * r_hat
     
     def update_leapfrog(self, bodies):
         """
-        リープフロッグ法による位置と速度の更新
+        Update position and velocity using the leapfrog method
         
-        パラメータ:
-        bodies (list): CelestialBodyオブジェクトのリスト
+        Parameters:
+        bodies (list): List of CelestialBody objects
         """
-        # 初期加速度を計算
+        # Calculate initial acceleration
         self.calculate_acceleration(bodies)
         
-        # 全天体の速度を半ステップ更新
+        # Update velocity for all bodies by half step
         for body in bodies:
             body.velocity += 0.5 * body.acceleration * self.dt
         
-        # 全天体の位置を1ステップ更新
+        # Update position for all bodies by full step
         for body in bodies:
             body.position += body.velocity * self.dt
             body.update_trajectory()
         
-        # 新しい加速度を計算
+        # Calculate new acceleration
         self.calculate_acceleration(bodies)
         
-        # 全天体の速度を残りの半ステップ更新
+        # Update velocity for all bodies by remaining half step
         for body in bodies:
             body.velocity += 0.5 * body.acceleration * self.dt
             
     def reset(self):
-        """物理エンジンのパラメータを初期状態に戻す"""
+        """Reset physics engine parameters to initial state"""
         self.dt = self.initial_dt
         self.G = self.initial_G
 
-# 天体系クラスの定義
+# Celestial system class definition
 class CelestialSystem:
-    """天体系を管理するクラス"""
+    """Class to manage a system of celestial bodies"""
     
     def __init__(self):
-        """天体系の初期化"""
+        """Initialize celestial system"""
         self.bodies = []
         
     def add_body(self, body):
         """
-        天体をシステムに追加
+        Add a body to the system
         
-        パラメータ:
-        body (CelestialBody): 追加する天体
+        Parameters:
+        body (CelestialBody): Body to add
         """
         self.bodies.append(body)
         
     def remove_body(self, body_name):
         """
-        天体をシステムから削除
+        Remove a body from the system
         
-        パラメータ:
-        body_name (str): 削除する天体の名前
+        Parameters:
+        body_name (str): Name of the body to remove
         """
         self.bodies = [body for body in self.bodies if body.name != body_name]
         
     def get_body(self, body_name):
         """
-        名前で天体を取得
+        Get a body by name
         
-        パラメータ:
-        body_name (str): 取得する天体の名前
+        Parameters:
+        body_name (str): Name of the body to get
         
-        戻り値:
-        CelestialBody: 見つかった天体、見つからない場合はNone
+        Returns:
+        CelestialBody: Found body, or None if not found
         """
         for body in self.bodies:
             if body.name == body_name:
@@ -195,19 +195,19 @@ class CelestialSystem:
         return None
     
     def reset(self):
-        """全天体を初期状態に戻す"""
+        """Reset all bodies to initial state"""
         for body in self.bodies:
             body.reset()
 
-# シミュレーションコントローラの定義
+# Simulation controller class definition
 class SimulationController:
-    """シミュレーションを制御するクラス"""
+    """Class to control the simulation"""
     
     def __init__(self, physics_engine, celestial_system):
         """
-        パラメータ:
-        physics_engine (PhysicsEngine): 物理計算エンジン
-        celestial_system (CelestialSystem): 天体系
+        Parameters:
+        physics_engine (PhysicsEngine): Physics calculation engine
+        celestial_system (CelestialSystem): Celestial system
         """
         self.physics_engine = physics_engine
         self.celestial_system = celestial_system
@@ -217,77 +217,77 @@ class SimulationController:
         self.max_time = float('inf')
         
     def start(self):
-        """シミュレーション開始"""
+        """Start simulation"""
         self.is_running = True
         
     def pause(self):
-        """シミュレーション一時停止"""
+        """Pause simulation"""
         self.is_running = False
         
     def reset(self):
-        """シミュレーションリセット"""
+        """Reset simulation"""
         self.current_time = 0.0
         self.celestial_system.reset()
         self.physics_engine.reset()
         
     def set_time_scale(self, scale):
         """
-        時間スケール調整
+        Adjust time scale
         
-        パラメータ:
-        scale (float): 新しい時間スケール
+        Parameters:
+        scale (float): New time scale
         """
-        self.time_scale = scale
+        self.time_scale = float(scale)
         
     def set_max_time(self, max_time):
         """
-        最大シミュレーション時間を設定
+        Set maximum simulation time
         
-        パラメータ:
-        max_time (float): 最大シミュレーション時間 (秒)
+        Parameters:
+        max_time (float): Maximum simulation time (seconds)
         """
-        self.max_time = max_time
+        self.max_time = float(max_time)
         
     def step(self):
-        """1ステップ進める"""
+        """Advance one step"""
         if not self.is_running or self.current_time >= self.max_time:
             return False
         
-        # 物理エンジンで天体の位置と速度を更新
+        # Update position and velocity of bodies using physics engine
         self.physics_engine.update_leapfrog(self.celestial_system.bodies)
         
-        # 現在時間を更新
+        # Update current time
         self.current_time += self.physics_engine.dt * self.time_scale
         
         return True
 
-# 可視化クラスの定義
+# Visualizer class definition
 class Visualizer:
-    """シミュレーション結果を可視化するクラス"""
+    """Class to visualize simulation results"""
     
     def __init__(self, celestial_system, mode='2D'):
         """
-        パラメータ:
-        celestial_system (CelestialSystem): 天体系
-        mode (str): 表示モード ('2D' または '3D')
+        Parameters:
+        celestial_system (CelestialSystem): Celestial system
+        mode (str): Display mode ('2D' or '3D')
         """
         self.celestial_system = celestial_system
         self.mode = mode
         self.fig = None
         self.ax = None
         self.show_trajectory = True
-        self.trajectory_length = 100  # 表示する軌道の長さ
+        self.trajectory_length = 100  # Length of trajectory to display
         self.show_labels = True
-        self.size_scale = 1.0  # 天体サイズのスケール
-        self.auto_scale = True  # 軸の自動スケーリング
-        self.view_limits = None  # 表示範囲
+        self.size_scale = 1.0  # Body size scale
+        self.auto_scale = True  # Automatic axis scaling
+        self.view_limits = None  # Display range
         
     def initialize(self, figsize=(10, 8)):
         """
-        描画環境の初期化
+        Initialize drawing environment
         
-        パラメータ:
-        figsize (tuple): 図のサイズ (幅, 高さ)
+        Parameters:
+        figsize (tuple): Figure size (width, height)
         """
         self.fig = plt.figure(figsize=figsize)
         
@@ -296,27 +296,27 @@ class Visualizer:
         else:  # '3D'
             self.ax = self.fig.add_subplot(111, projection='3d')
             
-        # タイトルと軸ラベルを設定
-        self.ax.set_title('天体シミュレーション')
+        # Set title and axis labels
+        self.ax.set_title('Celestial Simulation')
         self.ax.set_xlabel('X [m]')
         self.ax.set_ylabel('Y [m]')
         if self.mode == '3D':
             self.ax.set_zlabel('Z [m]')
             
     def update(self):
-        """フレーム更新"""
+        """Update frame"""
         self.ax.clear()
         
-        # タイトルと軸ラベルを再設定
-        self.ax.set_title('天体シミュレーション')
+        # Reset title and axis labels
+        self.ax.set_title('Celestial Simulation')
         self.ax.set_xlabel('X [m]')
         self.ax.set_ylabel('Y [m]')
         if self.mode == '3D':
             self.ax.set_zlabel('Z [m]')
         
-        # 全天体を描画
+        # Draw all bodies
         for body in self.celestial_system.bodies:
-            # 天体の位置を描画
+            # Draw body position
             size = max(20, body.radius/1e7) * self.size_scale
             if self.mode == '2D':
                 self.ax.scatter(body.position[0], body.position[1], 
@@ -325,7 +325,7 @@ class Visualizer:
                 self.ax.scatter(body.position[0], body.position[1], body.position[2], 
                                s=size, color=body.color, label=body.name if self.show_labels else None)
             
-            # 軌道を描画
+            # Draw trajectory
             if self.show_trajectory and len(body.trajectory) > 1:
                 trajectory = np.array(body.trajectory[-self.trajectory_length:])
                 if self.mode == '2D':
@@ -334,11 +334,11 @@ class Visualizer:
                     self.ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2], 
                                 color=body.color, alpha=0.5)
         
-        # 凡例を表示（ラベル表示が有効な場合のみ）
+        # Show legend (only if labels are enabled)
         if self.show_labels:
             self.ax.legend()
         
-        # 軸の範囲を設定
+        # Set axis range
         if self.auto_scale:
             self.ax.autoscale(enable=True, axis='both', tight=True)
         elif self.view_limits is not None:
@@ -348,22 +348,22 @@ class Visualizer:
                 self.ax.set_zlim(self.view_limits[2])
         
     def toggle_mode(self):
-        """2D/3D表示切り替え"""
+        """Toggle 2D/3D display"""
         if self.mode == '2D':
             self.mode = '3D'
         else:
             self.mode = '2D'
         
-        # 図を再初期化
+        # Reinitialize figure
         plt.close(self.fig)
         self.initialize()
         
     def toggle_trajectory(self, show=None):
         """
-        軌道表示切り替え
+        Toggle trajectory display
         
-        パラメータ:
-        show (bool): 軌道を表示するかどうか。Noneの場合は現在の状態を反転
+        Parameters:
+        show (bool): Whether to show trajectory. If None, toggle current state
         """
         if show is None:
             self.show_trajectory = not self.show_trajectory
@@ -372,10 +372,10 @@ class Visualizer:
             
     def toggle_labels(self, show=None):
         """
-        ラベル表示切り替え
+        Toggle label display
         
-        パラメータ:
-        show (bool): ラベルを表示するかどうか。Noneの場合は現在の状態を反転
+        Parameters:
+        show (bool): Whether to show labels. If None, toggle current state
         """
         if show is None:
             self.show_labels = not self.show_labels
@@ -384,118 +384,118 @@ class Visualizer:
             
     def set_trajectory_length(self, length):
         """
-        表示する軌道の長さを設定
+        Set length of trajectory to display
         
-        パラメータ:
-        length (int): 表示する軌道の長さ
+        Parameters:
+        length (int): Length of trajectory to display
         """
-        self.trajectory_length = length
+        self.trajectory_length = int(length)
         
     def set_size_scale(self, scale):
         """
-        天体サイズのスケールを設定
+        Set body size scale
         
-        パラメータ:
-        scale (float): サイズスケール
+        Parameters:
+        scale (float): Size scale
         """
-        self.size_scale = scale
+        self.size_scale = float(scale)
         
     def set_auto_scale(self, auto_scale):
         """
-        軸の自動スケーリングを設定
+        Set automatic axis scaling
         
-        パラメータ:
-        auto_scale (bool): 自動スケーリングを有効にするかどうか
+        Parameters:
+        auto_scale (bool): Whether to enable automatic scaling
         """
         self.auto_scale = auto_scale
         
     def set_view_limits(self, xlim, ylim, zlim=None):
         """
-        表示範囲を設定
+        Set display range
         
-        パラメータ:
-        xlim (tuple): X軸の表示範囲 (min, max)
-        ylim (tuple): Y軸の表示範囲 (min, max)
-        zlim (tuple): Z軸の表示範囲 (min, max)（3Dモードのみ）
+        Parameters:
+        xlim (tuple): X-axis display range (min, max)
+        ylim (tuple): Y-axis display range (min, max)
+        zlim (tuple): Z-axis display range (min, max) (3D mode only)
         """
         if zlim is not None:
             self.view_limits = (xlim, ylim, zlim)
         else:
             self.view_limits = (xlim, ylim)
 
-# プリセットシナリオを作成する関数
+# Functions to create preset scenarios
 def create_solar_system():
     """
-    太陽系のシミュレーションを作成
+    Create solar system simulation
     
-    戻り値:
-    CelestialSystem: 太陽系の天体系
+    Returns:
+    CelestialSystem: Solar system
     """
     system = CelestialSystem()
     
-    # 太陽
+    # Sun
     sun = CelestialBody(
-        name="太陽",
+        name="Sun",
         mass=1.989e30,  # kg
         radius=6.957e8,  # m
         position=[0, 0, 0],  # m
         velocity=[0, 0, 0],  # m/s
-        color="#FFFF00"  # 黄色
+        color="#FFFF00"  # Yellow
     )
     system.add_body(sun)
     
-    # 水星
+    # Mercury
     mercury = CelestialBody(
-        name="水星",
+        name="Mercury",
         mass=3.301e23,  # kg
         radius=2.44e6,  # m
         position=[5.791e10, 0, 0],  # m
         velocity=[0, 4.74e4, 0],  # m/s
-        color="#808080"  # グレー
+        color="#808080"  # Gray
     )
     system.add_body(mercury)
     
-    # 金星
+    # Venus
     venus = CelestialBody(
-        name="金星",
+        name="Venus",
         mass=4.867e24,  # kg
         radius=6.052e6,  # m
         position=[1.082e11, 0, 0],  # m
         velocity=[0, 3.5e4, 0],  # m/s
-        color="#FFA500"  # オレンジ
+        color="#FFA500"  # Orange
     )
     system.add_body(venus)
     
-    # 地球
+    # Earth
     earth = CelestialBody(
-        name="地球",
+        name="Earth",
         mass=5.972e24,  # kg
         radius=6.371e6,  # m
         position=[1.496e11, 0, 0],  # m
         velocity=[0, 2.98e4, 0],  # m/s
-        color="#0000FF"  # 青
+        color="#0000FF"  # Blue
     )
     system.add_body(earth)
     
-    # 火星
+    # Mars
     mars = CelestialBody(
-        name="火星",
+        name="Mars",
         mass=6.417e23,  # kg
         radius=3.39e6,  # m
         position=[2.279e11, 0, 0],  # m
         velocity=[0, 2.41e4, 0],  # m/s
-        color="#FF0000"  # 赤
+        color="#FF0000"  # Red
     )
     system.add_body(mars)
     
-    # 木星
+    # Jupiter
     jupiter = CelestialBody(
-        name="木星",
+        name="Jupiter",
         mass=1.898e27,  # kg
         radius=6.991e7,  # m
         position=[7.786e11, 0, 0],  # m
         velocity=[0, 1.31e4, 0],  # m/s
-        color="#A52A2A"  # 茶色
+        color="#A52A2A"  # Brown
     )
     system.add_body(jupiter)
     
@@ -504,32 +504,32 @@ def create_solar_system():
 
 def create_earth_moon_system():
     """
-    地球-月系のシミュレーションを作成
+    Create Earth-Moon system simulation
     
-    戻り値:
-    CelestialSystem: 地球-月系の天体系
+    Returns:
+    CelestialSystem: Earth-Moon system
     """
     system = CelestialSystem()
     
-    # 地球
+    # Earth
     earth = CelestialBody(
-        name="地球",
+        name="Earth",
         mass=5.972e24,  # kg
         radius=6.371e6,  # m
         position=[0, 0, 0],  # m
         velocity=[0, 0, 0],  # m/s
-        color="#0000FF"  # 青
+        color="#0000FF"  # Blue
     )
     system.add_body(earth)
     
-    # 月
+    # Moon
     moon = CelestialBody(
-        name="月",
+        name="Moon",
         mass=7.342e22,  # kg
         radius=1.737e6,  # m
         position=[3.844e8, 0, 0],  # m
         velocity=[0, 1.022e3, 0],  # m/s
-        color="#808080"  # グレー
+        color="#808080"  # Gray
     )
     system.add_body(moon)
     
@@ -538,32 +538,32 @@ def create_earth_moon_system():
 
 def create_binary_star_system():
     """
-    連星系のシミュレーションを作成
+    Create binary star system simulation
     
-    戻り値:
-    CelestialSystem: 連星系の天体系
+    Returns:
+    CelestialSystem: Binary star system
     """
     system = CelestialSystem()
     
-    # 恒星1
+    # Star 1
     star1 = CelestialBody(
-        name="恒星1",
+        name="Star 1",
         mass=1.5e30,  # kg
         radius=7e8,  # m
         position=[3e11, 0, 0],  # m
         velocity=[0, 2e4, 0],  # m/s
-        color="#FFFF00"  # 黄色
+        color="#FFFF00"  # Yellow
     )
     system.add_body(star1)
     
-    # 恒星2
+    # Star 2
     star2 = CelestialBody(
-        name="恒星2",
+        name="Star 2",
         mass=1.0e30,  # kg
         radius=5e8,  # m
         position=[-3e11, 0, 0],  # m
         velocity=[0, -3e4, 0],  # m/s
-        color="#FFA500"  # オレンジ
+        color="#FFA500"  # Orange
     )
     system.add_body(star2)
     
@@ -572,108 +572,112 @@ def create_binary_star_system():
 
 def create_three_body_system():
     """
-    三体問題のシミュレーションを作成
+    Create three-body problem simulation
     
-    戻り値:
-    CelestialSystem: 三体系の天体系
+    Returns:
+    CelestialSystem: Three-body system
     """
     system = CelestialSystem()
     
-    # 天体1
+    # Body 1
     body1 = CelestialBody(
-        name="天体1",
+        name="Body 1",
         mass=1.0e30,  # kg
         radius=5e8,  # m
         position=[3e11, 0, 0],  # m
         velocity=[0, 2e4, 0],  # m/s
-        color="#FF0000"  # 赤
+        color="#FF0000"  # Red
     )
     system.add_body(body1)
     
-    # 天体2
+    # Body 2
     body2 = CelestialBody(
-        name="天体2",
+        name="Body 2",
         mass=1.0e30,  # kg
         radius=5e8,  # m
         position=[-3e11, 0, 0],  # m
         velocity=[0, -2e4, 0],  # m/s
-        color="#0000FF"  # 青
+        color="#0000FF"  # Blue
     )
     system.add_body(body2)
     
-    # 天体3
+    # Body 3
     body3 = CelestialBody(
-        name="天体3",
+        name="Body 3",
         mass=5.0e29,  # kg
         radius=3e8,  # m
         position=[0, 4e11, 0],  # m
         velocity=[-1.5e4, 0, 0],  # m/s
-        color="#00FF00"  # 緑
+        color="#00FF00"  # Green
     )
     system.add_body(body3)
     
     return system
 
-# アニメーションをGIFに変換する関数
+# Function to convert animation to GIF
 def create_animation_gif(simulation_controller, visualizer, frames=100, interval=50):
     """
-    アニメーションGIFを作成
+    Create animation GIF
     
-    パラメータ:
-    simulation_controller (SimulationController): シミュレーション制御オブジェクト
-    visualizer (Visualizer): 可視化オブジェクト
-    frames (int): アニメーションのフレーム数
-    interval (int): フレーム間の時間 (ミリ秒)
+    Parameters:
+    simulation_controller (SimulationController): Simulation control object
+    visualizer (Visualizer): Visualization object
+    frames (int): Number of animation frames
+    interval (int): Time between frames (milliseconds)
     
-    戻り値:
-    bytes: GIFデータ
+    Returns:
+    bytes: GIF data
     """
-    # シミュレーションを初期状態にリセット
+    # Reset simulation to initial state
     simulation_controller.reset()
     simulation_controller.start()
     
-    # フレームを格納するリスト
+    # List to store frames
     frame_images = []
     
-    # 各フレームを生成
-    for _ in range(frames):
-        # シミュレーションを1ステップ進める
-        simulation_controller.step()
+    try:
+        # Generate each frame
+        for _ in range(frames):
+            # Advance simulation one step
+            simulation_controller.step()
+            
+            # Update visualization
+            visualizer.update()
+            
+            # Convert figure to byte stream
+            buf = io.BytesIO()
+            visualizer.fig.savefig(buf, format='png')
+            buf.seek(0)
+            
+            # Convert to PIL image
+            img = Image.open(buf)
+            frame_images.append(img)
         
-        # 描画を更新
-        visualizer.update()
+        # Create GIF
+        gif_buf = io.BytesIO()
+        frame_images[0].save(
+            gif_buf, 
+            format='GIF', 
+            save_all=True, 
+            append_images=frame_images[1:], 
+            duration=interval, 
+            loop=0
+        )
+        gif_buf.seek(0)
         
-        # 図をバイトストリームに変換
-        buf = io.BytesIO()
-        visualizer.fig.savefig(buf, format='png')
-        buf.seek(0)
-        
-        # PILイメージに変換
-        img = Image.open(buf)
-        frame_images.append(img)
-    
-    # GIFを作成
-    gif_buf = io.BytesIO()
-    frame_images[0].save(
-        gif_buf, 
-        format='GIF', 
-        save_all=True, 
-        append_images=frame_images[1:], 
-        duration=interval, 
-        loop=0
-    )
-    gif_buf.seek(0)
-    
-    return gif_buf.getvalue()
+        return gif_buf.getvalue()
+    except Exception as e:
+        st.error(f"Error creating animation: {str(e)}")
+        return None
 
-# Streamlitアプリのメイン部分
+# Main part of Streamlit app
 def main():
-    # セッション状態の初期化
+    # Initialize session state
     if 'celestial_system' not in st.session_state:
         st.session_state.celestial_system = create_solar_system()
     
     if 'physics_engine' not in st.session_state:
-        st.session_state.physics_engine = PhysicsEngine(dt=86400)  # 1日のステップ
+        st.session_state.physics_engine = PhysicsEngine(dt=86400)  # 1 day step
     
     if 'simulation_controller' not in st.session_state:
         st.session_state.simulation_controller = SimulationController(
@@ -691,251 +695,252 @@ def main():
     if 'current_scenario' not in st.session_state:
         st.session_state.current_scenario = 'solar_system'
     
-    # シナリオ選択
+    # Scenario selection
     scenario = st.sidebar.radio(
-        "シナリオ選択",
-        ('太陽系', '地球-月系', '連星系', '三体問題', 'カスタム'),
+        "Select Scenario",
+        ('Solar System', 'Earth-Moon System', 'Binary Star System', 'Three-Body Problem', 'Custom'),
         index=0 if st.session_state.current_scenario == 'solar_system' else
                1 if st.session_state.current_scenario == 'earth_moon' else
                2 if st.session_state.current_scenario == 'binary_star' else
                3 if st.session_state.current_scenario == 'three_body' else 4
     )
     
-    # シナリオが変更された場合
+    # If scenario changed
     scenario_map = {
-        '太陽系': 'solar_system',
-        '地球-月系': 'earth_moon',
-        '連星系': 'binary_star',
-        '三体問題': 'three_body',
-        'カスタム': 'custom'
+        'Solar System': 'solar_system',
+        'Earth-Moon System': 'earth_moon',
+        'Binary Star System': 'binary_star',
+        'Three-Body Problem': 'three_body',
+        'Custom': 'custom'
     }
     
     if st.session_state.current_scenario != scenario_map[scenario]:
-        if scenario == '太陽系':
+        if scenario == 'Solar System':
             st.session_state.celestial_system = create_solar_system()
-        elif scenario == '地球-月系':
+        elif scenario == 'Earth-Moon System':
             st.session_state.celestial_system = create_earth_moon_system()
-        elif scenario == '連星系':
+        elif scenario == 'Binary Star System':
             st.session_state.celestial_system = create_binary_star_system()
-        elif scenario == '三体問題':
+        elif scenario == 'Three-Body Problem':
             st.session_state.celestial_system = create_three_body_system()
-        # カスタムの場合は何もしない
+        # Do nothing for Custom
         
-        # シミュレーションコントローラと可視化を更新
+        # Update simulation controller and visualizer
         st.session_state.simulation_controller = SimulationController(
             st.session_state.physics_engine, 
             st.session_state.celestial_system
         )
         st.session_state.visualizer.celestial_system = st.session_state.celestial_system
         
-        # 現在のシナリオを更新
+        # Update current scenario
         st.session_state.current_scenario = scenario_map[scenario]
     
-    # シミュレーション設定
-    st.sidebar.subheader('シミュレーション設定')
+    # Simulation settings
+    st.sidebar.subheader('Simulation Settings')
     
-    # 時間ステップ
-    dt_days = st.sidebar.slider('時間ステップ (日)', 0.1, 10.0, 1.0)
-    st.session_state.physics_engine.dt = dt_days * 86400  # 日から秒に変換
+    # Time step
+    dt_days = st.sidebar.slider('Time Step (days)', 0.1, 10.0, 1.0)
+    st.session_state.physics_engine.dt = float(dt_days * 86400)  # Convert days to seconds
     
-    # 時間スケール
-    time_scale = st.sidebar.slider('時間スケール', 0.1, 10.0, 1.0)
+    # Time scale
+    time_scale = st.sidebar.slider('Time Scale', 0.1, 10.0, 1.0)
     st.session_state.simulation_controller.set_time_scale(time_scale)
     
-    # 表示設定
-    st.sidebar.subheader('表示設定')
+    # Display settings
+    st.sidebar.subheader('Display Settings')
     
-    # 2D/3D表示
-    display_mode = st.sidebar.radio('表示モード', ('2D', '3D'))
+    # 2D/3D display
+    display_mode = st.sidebar.radio('Display Mode', ('2D', '3D'))
     if st.session_state.visualizer.mode != display_mode:
         st.session_state.visualizer.mode = display_mode
         plt.close(st.session_state.visualizer.fig)
         st.session_state.visualizer.initialize()
     
-    # 軌道表示
-    show_trajectory = st.sidebar.checkbox('軌道を表示', value=True)
+    # Show trajectory
+    show_trajectory = st.sidebar.checkbox('Show Trajectory', value=True)
     st.session_state.visualizer.toggle_trajectory(show_trajectory)
     
-    # ラベル表示
-    show_labels = st.sidebar.checkbox('ラベルを表示', value=True)
+    # Show labels
+    show_labels = st.sidebar.checkbox('Show Labels', value=True)
     st.session_state.visualizer.toggle_labels(show_labels)
     
-    # 軌道の長さ
-    trajectory_length = st.sidebar.slider('軌道の長さ', 10, 1000, 100)
+    # Trajectory length
+    trajectory_length = st.sidebar.slider('Trajectory Length', 10, 1000, 100)
     st.session_state.visualizer.set_trajectory_length(trajectory_length)
     
-    # 天体サイズ
-    size_scale = st.sidebar.slider('天体サイズ', 0.1, 10.0, 1.0)
+    # Body size
+    size_scale = st.sidebar.slider('Body Size', 0.1, 10.0, 1.0)
     st.session_state.visualizer.set_size_scale(size_scale)
     
-    # シミュレーション制御ボタン
+    # Simulation control buttons
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button('開始'):
+        if st.button('Start', key='start_button'):
             st.session_state.is_running = True
             st.session_state.simulation_controller.start()
     
     with col2:
-        if st.button('一時停止'):
+        if st.button('Pause', key='pause_button'):
             st.session_state.is_running = False
             st.session_state.simulation_controller.pause()
     
     with col3:
-        if st.button('リセット'):
+        if st.button('Reset', key='reset_button'):
             st.session_state.is_running = False
             st.session_state.simulation_controller.reset()
     
-    # 天体パラメータの表示と編集
-    st.subheader('天体パラメータ')
+    # Body parameters display and editing
+    st.subheader('Body Parameters')
     
-    # 天体リストのタブ
-    body_tabs = st.tabs([body.name for body in st.session_state.celestial_system.bodies] + ["新規追加"])
+    # Body list tabs
+    body_tabs = st.tabs([body.name for body in st.session_state.celestial_system.bodies] + ["Add New"])
     
-    # 既存の天体の編集
-    for i, tab in enumerate(body_tabs[:-1]):  # 最後のタブ（新規追加）を除く
+    # Edit existing bodies
+    for i, tab in enumerate(body_tabs[:-1]):  # Exclude last tab (Add New)
         with tab:
             body = st.session_state.celestial_system.bodies[i]
             
             col1, col2 = st.columns(2)
             
             with col1:
-                new_name = st.text_input('名前', value=body.name, key=f'name_{i}')
-                new_mass = st.number_input('質量 (kg)', value=float(body.mass), format='%e', key=f'mass_{i}')
-                new_radius = st.number_input('半径 (m)', value=float(body.radius), format='%e', key=f'radius_{i}')
-                # 色選択をHEX形式に統一
-                new_color = st.color_picker('色', value=body.color, key=f'color_{i}')
+                new_name = st.text_input('Name', value=body.name, key=f'name_{i}')
+                new_mass = st.number_input('Mass (kg)', value=float(body.mass), format='%e', key=f'mass_{i}')
+                new_radius = st.number_input('Radius (m)', value=float(body.radius), format='%e', key=f'radius_{i}')
+                # Unify color selection to HEX format
+                new_color = st.color_picker('Color', value=body.color, key=f'color_{i}')
             
             with col2:
-                st.write('位置 (m)')
+                st.write('Position (m)')
                 new_pos_x = st.number_input('X', value=float(body.position[0]), format='%e', key=f'pos_x_{i}')
                 new_pos_y = st.number_input('Y', value=float(body.position[1]), format='%e', key=f'pos_y_{i}')
                 new_pos_z = st.number_input('Z', value=float(body.position[2]), format='%e', key=f'pos_z_{i}')
                 
-                st.write('速度 (m/s)')
+                st.write('Velocity (m/s)')
                 new_vel_x = st.number_input('X', value=float(body.velocity[0]), format='%e', key=f'vel_x_{i}')
                 new_vel_y = st.number_input('Y', value=float(body.velocity[1]), format='%e', key=f'vel_y_{i}')
                 new_vel_z = st.number_input('Z', value=float(body.velocity[2]), format='%e', key=f'vel_z_{i}')
             
-            # 更新ボタン
-            if st.button('更新', key=f'update_{i}'):
+            # Update button
+            if st.button('Update', key=f'update_{i}'):
                 body.name = new_name
-                body.mass = new_mass
-                body.radius = new_radius
+                body.mass = float(new_mass)
+                body.radius = float(new_radius)
                 body.color = new_color
-                body.position = np.array([new_pos_x, new_pos_y, new_pos_z])
-                body.velocity = np.array([new_vel_x, new_vel_y, new_vel_z])
+                body.position = np.array([new_pos_x, new_pos_y, new_pos_z], dtype=np.float64)
+                body.velocity = np.array([new_vel_x, new_vel_y, new_vel_z], dtype=np.float64)
                 body.initial_position = np.copy(body.position)
                 body.initial_velocity = np.copy(body.velocity)
-                st.success(f'天体 "{new_name}" を更新しました。')
+                st.success(f'Body "{new_name}" updated.')
             
-            # 削除ボタン
-            if st.button('削除', key=f'delete_{i}'):
+            # Delete button
+            if st.button('Delete', key=f'delete_{i}'):
                 st.session_state.celestial_system.remove_body(body.name)
-                st.success(f'天体 "{body.name}" を削除しました。')
+                st.success(f'Body "{body.name}" deleted.')
                 st.experimental_rerun()
     
-    # 新規天体の追加
+    # Add new body
     with body_tabs[-1]:
         col1, col2 = st.columns(2)
         
         with col1:
-            new_name = st.text_input('名前', value='新しい天体', key='new_name')
-            new_mass = st.number_input('質量 (kg)', value=1.0e24, format='%e', key='new_mass')
-            new_radius = st.number_input('半径 (m)', value=6.0e6, format='%e', key='new_radius')
-            # 色選択をHEX形式に統一
-            new_color = st.color_picker('色', value='#00FF00', key='new_color')
+            new_name = st.text_input('Name', value='New Body', key='new_name')
+            new_mass = st.number_input('Mass (kg)', value=1.0e24, format='%e', key='new_mass')
+            new_radius = st.number_input('Radius (m)', value=6.0e6, format='%e', key='new_radius')
+            # Unify color selection to HEX format
+            new_color = st.color_picker('Color', value='#00FF00', key='new_color')
         
         with col2:
-            st.write('位置 (m)')
+            st.write('Position (m)')
             new_pos_x = st.number_input('X', value=2.0e11, format='%e', key='new_pos_x')
             new_pos_y = st.number_input('Y', value=0.0, format='%e', key='new_pos_y')
             new_pos_z = st.number_input('Z', value=0.0, format='%e', key='new_pos_z')
             
-            st.write('速度 (m/s)')
+            st.write('Velocity (m/s)')
             new_vel_x = st.number_input('X', value=0.0, format='%e', key='new_vel_x')
             new_vel_y = st.number_input('Y', value=2.0e4, format='%e', key='new_vel_y')
             new_vel_z = st.number_input('Z', value=0.0, format='%e', key='new_vel_z')
         
-        # 追加ボタン
-        if st.button('追加', key='add_new_body'):
-            # 同名の天体がないか確認
+        # Add button
+        if st.button('Add', key='add_new_body'):
+            # Check if body with same name exists
             if any(body.name == new_name for body in st.session_state.celestial_system.bodies):
-                st.error(f'"{new_name}" という名前の天体は既に存在します。')
+                st.error(f'A body named "{new_name}" already exists.')
             else:
                 new_body = CelestialBody(
                     name=new_name,
-                    mass=new_mass,
-                    radius=new_radius,
-                    position=[new_pos_x, new_pos_y, new_pos_z],
-                    velocity=[new_vel_x, new_vel_y, new_vel_z],
+                    mass=float(new_mass),
+                    radius=float(new_radius),
+                    position=[float(new_pos_x), float(new_pos_y), float(new_pos_z)],
+                    velocity=[float(new_vel_x), float(new_vel_y), float(new_vel_z)],
                     color=new_color
                 )
                 st.session_state.celestial_system.add_body(new_body)
-                st.success(f'新しい天体 "{new_name}" を追加しました。')
+                st.success(f'New body "{new_name}" added.')
                 st.experimental_rerun()
     
-    # シミュレーション表示
-    st.subheader('シミュレーション')
+    # Simulation display
+    st.subheader('Simulation')
     
-    # プレースホルダーを作成
+    # Create placeholder
     simulation_placeholder = st.empty()
     
-    # シミュレーションを実行
+    # Run simulation
     if st.session_state.is_running:
-        # 一定回数のステップを実行
-        for _ in range(10):  # 10ステップごとに表示を更新
+        # Execute a fixed number of steps
+        for _ in range(10):  # Update display every 10 steps
             st.session_state.simulation_controller.step()
     
-    # 可視化を更新
+    # Update visualization
     st.session_state.visualizer.update()
     
-    # 図を表示
+    # Display figure
     simulation_placeholder.pyplot(st.session_state.visualizer.fig)
     
-    # アニメーションGIFの生成ボタン
-    st.subheader('アニメーションGIF生成')
+    # Animation GIF generation button
+    st.subheader('Generate Animation GIF')
     
     col1, col2 = st.columns(2)
     
     with col1:
-        frames = st.number_input('フレーム数', min_value=10, max_value=500, value=100, key='gif_frames')
+        frames = st.number_input('Number of Frames', min_value=10, max_value=500, value=100, key='gif_frames')
     
     with col2:
-        interval = st.number_input('フレーム間隔 (ミリ秒)', min_value=10, max_value=500, value=50, key='gif_interval')
+        interval = st.number_input('Frame Interval (ms)', min_value=10, max_value=500, value=50, key='gif_interval')
     
-    if st.button('アニメーションGIFを生成', key='generate_gif'):
-        with st.spinner('アニメーションを生成中...'):
-            # 現在の状態を保存
+    if st.button('Generate Animation GIF', key='generate_gif'):
+        with st.spinner('Generating animation...'):
+            # Save current state
             current_running = st.session_state.is_running
             
-            # アニメーションを生成
+            # Generate animation
             gif_data = create_animation_gif(
                 st.session_state.simulation_controller,
                 st.session_state.visualizer,
-                frames=frames,
-                interval=interval
+                frames=int(frames),
+                interval=int(interval)
             )
             
-            # Base64エンコード
-            b64 = base64.b64encode(gif_data).decode()
+            if gif_data:
+                # Base64 encode
+                b64 = base64.b64encode(gif_data).decode()
+                
+                # Display with HTML
+                st.markdown(
+                    f'<img src="data:image/gif;base64,{b64}" alt="animation">',
+                    unsafe_allow_html=True
+                )
+                
+                # Download button
+                st.download_button(
+                    label="Download GIF",
+                    data=gif_data,
+                    file_name="celestial_simulation.gif",
+                    mime="image/gif",
+                    key='download_gif'
+                )
             
-            # HTMLで表示
-            st.markdown(
-                f'<img src="data:image/gif;base64,{b64}" alt="animation">',
-                unsafe_allow_html=True
-            )
-            
-            # ダウンロードボタン
-            st.download_button(
-                label="GIFをダウンロード",
-                data=gif_data,
-                file_name="celestial_simulation.gif",
-                mime="image/gif",
-                key='download_gif'
-            )
-            
-            # 元の状態に戻す
+            # Restore original state
             if current_running:
                 st.session_state.is_running = True
                 st.session_state.simulation_controller.start()
@@ -943,31 +948,12 @@ def main():
                 st.session_state.is_running = False
                 st.session_state.simulation_controller.pause()
     
-    # Streamlit Cloudへのデプロイ方法
-    st.subheader('Streamlit Cloudへのデプロイ方法')
+    # Deployment instructions
+    st.subheader('Deployment to Streamlit Cloud')
     
-    st.markdown("""
-    このアプリケーションをStreamlit Cloudにデプロイするには、以下の手順に従ってください：
-    
-    1. GitHubアカウントを作成し、新しいリポジトリを作成します。
-    2. このコードを `app.py` として保存し、リポジトリにアップロードします。
-    3. `requirements.txt` ファイルを作成し、以下の内容を記述します：
-       ```
-       streamlit>=1.22.0
-       numpy>=1.22.0
-       matplotlib>=3.5.0
-       pillow>=9.0.0
-       ```
-    4. [Streamlit Cloud](https://streamlit.io/cloud) にアクセスし、GitHubアカウントでログインします。
-    5. 「New app」をクリックし、作成したリポジトリを選択します。
-    6. メインファイルとして `app.py` を指定し、「Deploy」をクリックします。
-    
-    数分後、アプリケーションがデプロイされ、公開URLが提供されます。Streamlit Cloudの無料枠では、このようなアプリケーションを公開することができます。
-    """)
-    
-    # フッター
+    # Footer
     st.markdown('---')
-    st.markdown('© 2025 天体シミュレーター')
+    st.markdown('© 2025 Celestial Body Simulator')
 
 if __name__ == '__main__':
     main()
