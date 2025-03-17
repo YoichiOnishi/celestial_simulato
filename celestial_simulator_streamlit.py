@@ -9,7 +9,6 @@ import base64
 from PIL import Image
 import time
 import copy
-import threading
 
 # Title and introduction
 st.title('Celestial Body Simulator')
@@ -297,6 +296,7 @@ class Visualizer:
         Parameters:
         figsize (tuple): Figure size (width, height)
         """
+        plt.close('all')  # Close any existing figures to prevent memory leaks
         self.fig = plt.figure(figsize=figsize)
         
         if self.mode == '2D':
@@ -313,6 +313,9 @@ class Visualizer:
             
     def update(self):
         """Update frame"""
+        if self.fig is None or self.ax is None:
+            self.initialize()
+            
         self.ax.clear()
         
         # Reset title and axis labels
@@ -355,6 +358,21 @@ class Visualizer:
             if self.mode == '3D' and len(self.view_limits) > 2:
                 self.ax.set_zlim(self.view_limits[2])
         
+        # Ensure tight layout
+        self.fig.tight_layout()
+        
+    def get_image(self):
+        """
+        Get current figure as PIL Image
+        
+        Returns:
+        PIL.Image: Current figure as image
+        """
+        buf = io.BytesIO()
+        self.fig.savefig(buf, format='png', dpi=80, bbox_inches='tight')
+        buf.seek(0)
+        return Image.open(buf)
+        
     def toggle_mode(self):
         """Toggle 2D/3D display"""
         if self.mode == '2D':
@@ -363,7 +381,6 @@ class Visualizer:
             self.mode = '2D'
         
         # Reinitialize figure
-        plt.close(self.fig)
         self.initialize()
         
     def toggle_trajectory(self, show=None):
@@ -622,18 +639,19 @@ def create_three_body_system():
     
     return system
 
-# Function to create animation frames
-def create_animation_frames(simulation_controller, visualizer, frames=100):
+# Function to create animation GIF
+def create_animation_gif(simulation_controller, visualizer, frames=100, interval=50):
     """
-    Create animation frames
+    Create animation GIF
     
     Parameters:
     simulation_controller (SimulationController): Simulation control object
     visualizer (Visualizer): Visualization object
     frames (int): Number of animation frames
+    interval (int): Time between frames (milliseconds)
     
     Returns:
-    list: List of image frames
+    bytes: GIF data
     """
     # Create a deep copy of the simulation controller to avoid modifying the original
     sim_copy = copy.deepcopy(simulation_controller)
@@ -652,18 +670,25 @@ def create_animation_frames(simulation_controller, visualizer, frames=100):
             # Update visualization
             visualizer.update()
             
-            # Convert figure to byte stream
-            buf = io.BytesIO()
-            visualizer.fig.savefig(buf, format='png', dpi=80)
-            buf.seek(0)
-            
-            # Convert to PIL Image
-            img = Image.open(buf)
+            # Get image
+            img = visualizer.get_image()
             frame_images.append(img)
         
-        return frame_images
+        # Create GIF
+        gif_buf = io.BytesIO()
+        frame_images[0].save(
+            gif_buf, 
+            format='GIF', 
+            save_all=True, 
+            append_images=frame_images[1:], 
+            duration=int(interval), 
+            loop=0
+        )
+        gif_buf.seek(0)
+        
+        return gif_buf.getvalue()
     except Exception as e:
-        st.error(f"Error creating animation frames: {str(e)}")
+        st.error(f"Error creating animation: {str(e)}")
         return None
 
 # Main part of Streamlit app
@@ -691,17 +716,8 @@ def main():
     if 'current_scenario' not in st.session_state:
         st.session_state.current_scenario = 'solar_system'
         
-    if 'animation_frames' not in st.session_state:
-        st.session_state.animation_frames = None
-        
-    if 'current_frame' not in st.session_state:
-        st.session_state.current_frame = 0
-        
-    if 'animation_playing' not in st.session_state:
-        st.session_state.animation_playing = False
-        
-    if 'animation_speed' not in st.session_state:
-        st.session_state.animation_speed = 100  # milliseconds between frames
+    if 'animation_gif' not in st.session_state:
+        st.session_state.animation_gif = None
     
     # Scenario selection
     scenario = st.sidebar.radio(
@@ -740,10 +756,8 @@ def main():
         )
         st.session_state.visualizer.celestial_system = st.session_state.celestial_system
         
-        # Reset animation frames
-        st.session_state.animation_frames = None
-        st.session_state.current_frame = 0
-        st.session_state.animation_playing = False
+        # Reset animation
+        st.session_state.animation_gif = None
         
         # Update current scenario
         st.session_state.current_scenario = scenario_map[scenario]
@@ -766,7 +780,6 @@ def main():
     display_mode = st.sidebar.radio('Display Mode', ('2D', '3D'))
     if st.session_state.visualizer.mode != display_mode:
         st.session_state.visualizer.mode = display_mode
-        plt.close(st.session_state.visualizer.fig)
         st.session_state.visualizer.initialize()
     
     # Show trajectory
@@ -802,10 +815,8 @@ def main():
         if st.button('Reset', key='reset_button'):
             st.session_state.is_running = False
             st.session_state.simulation_controller.reset()
-            # Reset animation frames
-            st.session_state.animation_frames = None
-            st.session_state.current_frame = 0
-            st.session_state.animation_playing = False
+            # Reset animation
+            st.session_state.animation_gif = None
     
     # Body parameters display and editing
     st.subheader('Body Parameters')
@@ -899,7 +910,7 @@ def main():
     # Simulation display
     st.subheader('Simulation')
     
-    # Create placeholder
+    # Create placeholder for simulation display
     simulation_placeholder = st.empty()
     
     # Run simulation
@@ -911,8 +922,11 @@ def main():
     # Update visualization
     st.session_state.visualizer.update()
     
-    # Display figure
-    simulation_placeholder.pyplot(st.session_state.visualizer.fig)
+    # Get current image
+    current_image = st.session_state.visualizer.get_image()
+    
+    # Display image instead of pyplot
+    simulation_placeholder.image(current_image, use_container_width=True)
     
     # Animation Generation
     st.subheader('Generate Animation')
@@ -924,24 +938,20 @@ def main():
     
     with col2:
         interval = st.number_input('Frame Interval (ms)', min_value=10, max_value=500, value=50, key='interval')
-        st.session_state.animation_speed = interval
     
     # Generate animation button
     if st.button('Generate Animation', key='generate_animation'):
-        with st.spinner('Generating animation...'):
+        with st.spinner('Generating animation... This may take a moment.'):
             # Save current state
             current_running = st.session_state.is_running
             
-            # Generate animation frames
-            st.session_state.animation_frames = create_animation_frames(
+            # Generate animation GIF
+            st.session_state.animation_gif = create_animation_gif(
                 st.session_state.simulation_controller,
                 st.session_state.visualizer,
-                frames=int(frames)
+                frames=int(frames),
+                interval=int(interval)
             )
-            
-            # Reset current frame
-            st.session_state.current_frame = 0
-            st.session_state.animation_playing = False
             
             # Restore original state
             if current_running:
@@ -951,113 +961,46 @@ def main():
                 st.session_state.is_running = False
                 st.session_state.simulation_controller.pause()
     
-    # Display animation if frames exist
-    if st.session_state.animation_frames:
-        st.subheader("Animation Player")
+    # Display animation if exists
+    if st.session_state.animation_gif:
+        st.subheader("Animation")
         
-        # Create animation container
-        animation_container = st.container()
-        
-        # Create columns for animation controls
-        anim_col1, anim_col2, anim_col3, anim_col4 = st.columns([1, 1, 4, 1])
-        
-        # Previous frame button
-        with anim_col1:
-            if st.button("◀", key="prev_frame"):
-                st.session_state.animation_playing = False
-                st.session_state.current_frame = max(0, st.session_state.current_frame - 1)
-        
-        # Play/Pause button
-        with anim_col2:
-            if st.session_state.animation_playing:
-                if st.button("⏸", key="pause_animation"):
-                    st.session_state.animation_playing = False
-            else:
-                if st.button("▶", key="play_animation"):
-                    st.session_state.animation_playing = True
-        
-        # Frame slider
-        with anim_col3:
-            st.session_state.current_frame = st.slider(
-                "Frame", 
-                min_value=0, 
-                max_value=len(st.session_state.animation_frames) - 1, 
-                value=st.session_state.current_frame,
-                key="frame_slider"
-            )
-        
-        # Next frame button
-        with anim_col4:
-            if st.button("▶", key="next_frame"):
-                st.session_state.animation_playing = False
-                st.session_state.current_frame = min(len(st.session_state.animation_frames) - 1, st.session_state.current_frame + 1)
-        
-        # Animation speed control
-        st.slider(
-            "Animation Speed", 
-            min_value=10, 
-            max_value=500, 
-            value=st.session_state.animation_speed,
-            key="animation_speed_slider",
-            help="Milliseconds between frames (lower is faster)"
+        # Display the GIF directly
+        st.markdown(
+            f'<img src="data:image/gif;base64,{base64.b64encode(st.session_state.animation_gif).decode()}" alt="Animation GIF" style="width:100%;">',
+            unsafe_allow_html=True
         )
         
-        # Display current frame
-        with animation_container:
-            st.image(st.session_state.animation_frames[st.session_state.current_frame], use_container_width=True)
-        
-        # Auto-advance frame if animation is playing
-        if st.session_state.animation_playing:
-            # Use a JavaScript hack to auto-refresh the page
-            autorefresh_rate_ms = st.session_state.animation_speed
-            next_frame = (st.session_state.current_frame + 1) % len(st.session_state.animation_frames)
-            
-            # Create JavaScript to update the frame
-            js_code = f"""
-            <script>
-                function nextFrame() {{
-                    var slider = document.querySelector('div[data-testid="stSlider"] input[type="range"]');
-                    if (slider) {{
-                        slider.value = {next_frame};
-                        slider.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    }}
-                }}
-                setTimeout(nextFrame, {autorefresh_rate_ms});
-            </script>
-            """
-            st.components.v1.html(js_code, height=0)
-        
-        # Create a GIF from frames
-        if st.button("Create Downloadable GIF", key="create_gif"):
-            with st.spinner("Creating GIF..."):
-                # Create GIF
-                gif_buf = io.BytesIO()
-                st.session_state.animation_frames[0].save(
-                    gif_buf, 
-                    format='GIF', 
-                    save_all=True, 
-                    append_images=st.session_state.animation_frames[1:], 
-                    duration=int(interval), 
-                    loop=0
-                )
-                gif_buf.seek(0)
-                
-                # Provide download button
-                st.download_button(
-                    label="Download GIF",
-                    data=gif_buf,
-                    file_name="celestial_simulation.gif",
-                    mime="image/gif",
-                    key='download_gif'
-                )
-                
-                # Display the GIF directly
-                st.markdown("### Preview of Downloadable GIF")
-                st.markdown(
-                    f'<img src="data:image/gif;base64,{base64.b64encode(gif_buf.getvalue()).decode()}" alt="Animation GIF" style="width:100%;">',
-                    unsafe_allow_html=True
-                )
+        # Provide download button
+        st.download_button(
+            label="Download Animation GIF",
+            data=st.session_state.animation_gif,
+            file_name="celestial_simulation.gif",
+            mime="image/gif",
+            key='download_gif'
+        )
     
+    # Deployment instructions
+    st.subheader('Deployment to Streamlit Cloud')
+    
+    st.markdown("""
+    To deploy this application to Streamlit Cloud, follow these steps:
+    
+    1. Create a GitHub account and create a new repository.
+    2. Save this code as `app.py` and upload it to the repository.
+    3. Create a `requirements.txt` file with the following content:
+       ```
+       streamlit>=1.22.0
+       numpy>=1.22.0
+       matplotlib>=3.5.0
+       pillow>=9.0.0
+       ```
+    4. Go to [Streamlit Cloud](https://streamlit.io/cloud) and log in with your GitHub account.
+    5. Click "New app" and select the repository you created.
+    6. Specify `app.py` as the main file and click "Deploy".
+    
+    After a few minutes, your application will be deployed and a public URL will be provided. Streamlit Cloud's free tier allows you to publish applications like this.
+    """)
     
     # Footer
     st.markdown('---')
