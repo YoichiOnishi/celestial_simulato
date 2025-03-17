@@ -714,9 +714,6 @@ def init_session_state():
     if 'animation_playing' not in st.session_state:
         st.session_state.animation_playing = False
         
-    if 'last_frame_time' not in st.session_state:
-        st.session_state.last_frame_time = time.time()
-        
     if 'anim_speed' not in st.session_state:
         st.session_state.anim_speed = 200  # milliseconds between frames
         
@@ -727,7 +724,6 @@ def init_session_state():
 def play_animation():
     """Start animation playback"""
     st.session_state.animation_playing = True
-    st.session_state.last_frame_time = time.time()
 
 def pause_animation():
     """Pause animation playback"""
@@ -915,7 +911,6 @@ def main():
             if st.button('Delete', key=f'delete_{i}'):
                 st.session_state.celestial_system.remove_body(body.name)
                 st.success(f'Body "{body.name}" deleted.')
-                st.experimental_rerun()
     
     # Add new body
     with body_tabs[-1]:
@@ -955,7 +950,6 @@ def main():
                 )
                 st.session_state.celestial_system.add_body(new_body)
                 st.success(f'New body "{new_name}" added.')
-                st.experimental_rerun()
     
     # Simulation display
     st.subheader('Simulation')
@@ -985,28 +979,26 @@ def main():
     col1, col2 = st.columns(2)
     
     with col1:
-        # Use callback to update session state
-        frames = st.number_input(
+        # Use direct assignment instead of callback
+        frame_count = st.number_input(
             'Number of Frames', 
             min_value=10, 
             max_value=500, 
             value=st.session_state.frame_count,
-            key='frame_count_input',
-            on_change=update_frame_count,
-            args=(st.session_state.get('frame_count_input', 100),)
+            key='frame_count_input'
         )
+        st.session_state.frame_count = frame_count
     
     with col2:
-        # Use callback to update session state
+        # Use direct assignment instead of callback
         anim_speed = st.number_input(
             'Animation Speed (ms)', 
             min_value=50, 
             max_value=1000, 
             value=st.session_state.anim_speed,
-            key='anim_speed_input',
-            on_change=update_anim_speed,
-            args=(st.session_state.get('anim_speed_input', 200),)
+            key='anim_speed_input'
         )
+        st.session_state.anim_speed = anim_speed
     
     # Generate animation button
     if st.button('Generate Animation', key='generate_animation'):
@@ -1045,34 +1037,36 @@ def main():
         
         # Previous frame button
         with anim_col1:
-            if st.button("◀", key="prev_frame", on_click=prev_frame):
-                pass  # Action handled by callback
+            if st.button("◀", key="prev_frame"):
+                st.session_state.animation_playing = False
+                st.session_state.current_frame = max(0, st.session_state.current_frame - 1)
         
         # Play/Pause button
         with anim_col2:
             if st.session_state.animation_playing:
-                if st.button("⏸", key="pause_animation", on_click=pause_animation):
-                    pass  # Action handled by callback
+                if st.button("⏸", key="pause_animation"):
+                    st.session_state.animation_playing = False
             else:
-                if st.button("▶", key="play_animation", on_click=play_animation):
-                    pass  # Action handled by callback
+                if st.button("▶", key="play_animation"):
+                    st.session_state.animation_playing = True
         
         # Frame slider
         with anim_col3:
-            st.slider(
+            frame_idx = st.slider(
                 "Frame", 
                 min_value=0, 
                 max_value=len(st.session_state.animation_frames) - 1, 
                 value=st.session_state.current_frame,
-                key="frame_slider",
-                on_change=update_frame,
-                args=(st.session_state.get('frame_slider', 0),)
+                key="frame_slider"
             )
+            # Direct assignment instead of callback
+            st.session_state.current_frame = frame_idx
         
         # Next frame button
         with anim_col4:
-            if st.button("▶", key="next_frame", on_click=next_frame):
-                pass  # Action handled by callback
+            if st.button("▶", key="next_frame"):
+                st.session_state.animation_playing = False
+                st.session_state.current_frame = min(len(st.session_state.animation_frames) - 1, st.session_state.current_frame + 1)
         
         # Display current frame
         with animation_container:
@@ -1085,13 +1079,16 @@ def main():
         
         # Auto-advance frame if animation is playing
         if st.session_state.animation_playing:
-            current_time = time.time()
-            elapsed_ms = (current_time - st.session_state.last_frame_time) * 1000
+            # Advance to next frame
+            next_frame = (st.session_state.current_frame + 1) % len(st.session_state.animation_frames)
+            st.session_state.current_frame = next_frame
             
-            if elapsed_ms >= st.session_state.anim_speed:
-                st.session_state.current_frame = (st.session_state.current_frame + 1) % len(st.session_state.animation_frames)
-                st.session_state.last_frame_time = current_time
-                st.experimental_rerun()
+            # Add a delay using Streamlit's built-in functionality
+            st.empty().info(f"Playing animation... Frame {next_frame + 1}/{len(st.session_state.animation_frames)}")
+            time.sleep(st.session_state.anim_speed / 1000.0)
+            
+            # Use st.rerun() instead of experimental_rerun
+            st.rerun()
         
         # Create a downloadable GIF
         if st.button("Create Downloadable GIF", key="create_gif"):
