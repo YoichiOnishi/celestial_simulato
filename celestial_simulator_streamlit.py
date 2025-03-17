@@ -8,6 +8,8 @@ import io
 import base64
 from PIL import Image
 import time
+import copy
+import html
 
 # Title and introduction
 st.title('Celestial Body Simulator')
@@ -620,10 +622,10 @@ def create_three_body_system():
     
     return system
 
-# Function to convert animation to GIF
-def create_animation_gif(simulation_controller, visualizer, frames=100, interval=50):
+# Function to create interactive HTML5 animation
+def create_interactive_animation(simulation_controller, visualizer, frames=100, interval=50):
     """
-    Create animation GIF
+    Create interactive HTML5 animation
     
     Parameters:
     simulation_controller (SimulationController): Simulation control object
@@ -632,15 +634,12 @@ def create_animation_gif(simulation_controller, visualizer, frames=100, interval
     interval (int): Time between frames (milliseconds)
     
     Returns:
-    bytes: GIF data
+    str: HTML code for interactive animation
     """
-    # Reset simulation to initial state
-    simulation_controller.reset()
-    simulation_controller.start()
-    
     # Create a deep copy of the simulation controller to avoid modifying the original
-    import copy
     sim_copy = copy.deepcopy(simulation_controller)
+    sim_copy.reset()
+    sim_copy.start()
     
     # List to store frames
     frame_images = []
@@ -656,26 +655,81 @@ def create_animation_gif(simulation_controller, visualizer, frames=100, interval
             
             # Convert figure to byte stream
             buf = io.BytesIO()
-            visualizer.fig.savefig(buf, format='png')
+            visualizer.fig.savefig(buf, format='png', dpi=80)
             buf.seek(0)
             
-            # Convert to PIL image
-            img = Image.open(buf)
-            frame_images.append(img)
+            # Convert to base64
+            img_str = base64.b64encode(buf.read()).decode()
+            frame_images.append(img_str)
         
-        # Create GIF
-        gif_buf = io.BytesIO()
-        frame_images[0].save(
-            gif_buf, 
-            format='GIF', 
-            save_all=True, 
-            append_images=frame_images[1:], 
-            duration=int(interval), 
-            loop=0
-        )
-        gif_buf.seek(0)
+        # Create HTML5 animation
+        html_animation = f"""
+        <div id="animation-container" style="width:100%; margin:0 auto;">
+            <img id="animation-frame" src="data:image/png;base64,{frame_images[0]}" style="width:100%; max-width:800px; display:block; margin:0 auto;">
+            <div style="width:100%; max-width:800px; margin:10px auto;">
+                <input type="range" id="animation-slider" min="0" max="{len(frame_images)-1}" value="0" style="width:80%; margin:0 auto; display:block;">
+                <div style="display:flex; justify-content:space-between; width:80%; margin:0 auto;">
+                    <button id="animation-play" style="margin:5px;">Play</button>
+                    <button id="animation-pause" style="margin:5px;">Pause</button>
+                    <span id="frame-counter">Frame: 0/{len(frame_images)-1}</span>
+                </div>
+            </div>
+        </div>
+        <script>
+            // Animation frames
+            const frames = {frame_images};
+            let currentFrame = 0;
+            let isPlaying = false;
+            let animationInterval;
+            
+            // DOM elements
+            const frameElement = document.getElementById('animation-frame');
+            const sliderElement = document.getElementById('animation-slider');
+            const playButton = document.getElementById('animation-play');
+            const pauseButton = document.getElementById('animation-pause');
+            const frameCounter = document.getElementById('frame-counter');
+            
+            // Update frame
+            function updateFrame(index) {{
+                frameElement.src = 'data:image/png;base64,' + frames[index];
+                sliderElement.value = index;
+                frameCounter.textContent = `Frame: ${{index}}/${{frames.length-1}}`;
+                currentFrame = index;
+            }}
+            
+            // Play animation
+            function playAnimation() {{
+                if (!isPlaying) {{
+                    isPlaying = true;
+                    animationInterval = setInterval(() => {{
+                        currentFrame = (currentFrame + 1) % frames.length;
+                        updateFrame(currentFrame);
+                    }}, {interval});
+                }}
+            }}
+            
+            // Pause animation
+            function pauseAnimation() {{
+                if (isPlaying) {{
+                    isPlaying = false;
+                    clearInterval(animationInterval);
+                }}
+            }}
+            
+            // Event listeners
+            playButton.addEventListener('click', playAnimation);
+            pauseButton.addEventListener('click', pauseAnimation);
+            sliderElement.addEventListener('input', function() {{
+                pauseAnimation();
+                updateFrame(parseInt(this.value));
+            }});
+            
+            // Initialize
+            updateFrame(0);
+        </script>
+        """
         
-        return gif_buf.getvalue()
+        return html_animation
     except Exception as e:
         st.error(f"Error creating animation: {str(e)}")
         return None
@@ -748,8 +802,8 @@ def main():
     # Simulation settings
     st.sidebar.subheader('Simulation Settings')
     
-    # Time step
-    dt_days = st.sidebar.slider('Time Step (days)', 0.1, 10.0, 1.0)
+    # Time step - Increased maximum to 100 days
+    dt_days = st.sidebar.slider('Time Step (days)', 0.1, 100.0, 1.0)
     st.session_state.physics_engine.dt = float(dt_days * 86400)  # Convert days to seconds
     
     # Time scale
@@ -907,8 +961,8 @@ def main():
     # Display figure
     simulation_placeholder.pyplot(st.session_state.visualizer.fig)
     
-    # Animation GIF generation button
-    st.subheader('Generate Animation GIF')
+    # Interactive Animation Generation
+    st.subheader('Generate Interactive Animation')
     
     col1, col2 = st.columns(2)
     
@@ -918,37 +972,24 @@ def main():
     with col2:
         interval = st.number_input('Frame Interval (ms)', min_value=10, max_value=500, value=50, key='gif_interval')
     
-    if st.button('Generate Animation GIF', key='generate_gif'):
-        with st.spinner('Generating animation...'):
+    if st.button('Generate Interactive Animation', key='generate_animation'):
+        with st.spinner('Generating interactive animation...'):
             # Save current state
             current_running = st.session_state.is_running
             
             # Generate animation
-            gif_data = create_animation_gif(
+            html_animation = create_interactive_animation(
                 st.session_state.simulation_controller,
                 st.session_state.visualizer,
                 frames=int(frames),
                 interval=int(interval)
             )
             
-            if gif_data:
-                # Base64 encode
-                b64 = base64.b64encode(gif_data).decode()
-                
-                # Display with HTML
-                st.markdown(
-                    f'<img src="data:image/gif;base64,{b64}" alt="animation">',
-                    unsafe_allow_html=True
-                )
-                
-                # Download button
-                st.download_button(
-                    label="Download GIF",
-                    data=gif_data,
-                    file_name="celestial_simulation.gif",
-                    mime="image/gif",
-                    key='download_gif'
-                )
+            if html_animation:
+                # Display interactive animation
+                st.subheader("Interactive Animation")
+                st.markdown("Use the slider to scrub through frames or play/pause to control animation:")
+                st.components.v1.html(html_animation, height=600)
             
             # Restore original state
             if current_running:
