@@ -19,6 +19,19 @@ st.markdown("""
 # サイドバーの作成
 st.sidebar.header('シミュレーション設定')
 
+# 色名をHEX形式に変換する辞書
+COLOR_MAP = {
+    'red': '#FF0000',
+    'green': '#00FF00',
+    'blue': '#0000FF',
+    'yellow': '#FFFF00',
+    'orange': '#FFA500',
+    'purple': '#800080',
+    'brown': '#A52A2A',
+    'gray': '#808080',
+    'black': '#000000'
+}
+
 # 天体クラスの定義
 class CelestialBody:
     """天体オブジェクトを表すクラス"""
@@ -39,7 +52,8 @@ class CelestialBody:
         self.position = np.array(position, dtype=float)
         self.velocity = np.array(velocity, dtype=float)
         self.acceleration = np.zeros(3)
-        self.color = color
+        # 色名をHEX形式に変換
+        self.color = COLOR_MAP.get(color, color) if isinstance(color, str) else color
         self.trajectory = [np.copy(self.position)]
         self.initial_position = np.copy(position)
         self.initial_velocity = np.copy(velocity)
@@ -426,7 +440,7 @@ def create_solar_system():
         radius=6.957e8,  # m
         position=[0, 0, 0],  # m
         velocity=[0, 0, 0],  # m/s
-        color="yellow"
+        color="#FFFF00"  # 黄色
     )
     system.add_body(sun)
     
@@ -437,7 +451,7 @@ def create_solar_system():
         radius=2.44e6,  # m
         position=[5.791e10, 0, 0],  # m
         velocity=[0, 4.74e4, 0],  # m/s
-        color="gray"
+        color="#808080"  # グレー
     )
     system.add_body(mercury)
     
@@ -448,7 +462,7 @@ def create_solar_system():
         radius=6.052e6,  # m
         position=[1.082e11, 0, 0],  # m
         velocity=[0, 3.5e4, 0],  # m/s
-        color="orange"
+        color="#FFA500"  # オレンジ
     )
     system.add_body(venus)
     
@@ -459,7 +473,7 @@ def create_solar_system():
         radius=6.371e6,  # m
         position=[1.496e11, 0, 0],  # m
         velocity=[0, 2.98e4, 0],  # m/s
-        color="blue"
+        color="#0000FF"  # 青
     )
     system.add_body(earth)
     
@@ -470,7 +484,7 @@ def create_solar_system():
         radius=3.39e6,  # m
         position=[2.279e11, 0, 0],  # m
         velocity=[0, 2.41e4, 0],  # m/s
-        color="red"
+        color="#FF0000"  # 赤
     )
     system.add_body(mars)
     
@@ -481,7 +495,7 @@ def create_solar_system():
         radius=6.991e7,  # m
         position=[7.786e11, 0, 0],  # m
         velocity=[0, 1.31e4, 0],  # m/s
-        color="brown"
+        color="#A52A2A"  # 茶色
     )
     system.add_body(jupiter)
     
@@ -504,7 +518,7 @@ def create_earth_moon_system():
         radius=6.371e6,  # m
         position=[0, 0, 0],  # m
         velocity=[0, 0, 0],  # m/s
-        color="blue"
+        color="#0000FF"  # 青
     )
     system.add_body(earth)
     
@@ -515,7 +529,7 @@ def create_earth_moon_system():
         radius=1.737e6,  # m
         position=[3.844e8, 0, 0],  # m
         velocity=[0, 1.022e3, 0],  # m/s
-        color="gray"
+        color="#808080"  # グレー
     )
     system.add_body(moon)
     
@@ -538,7 +552,7 @@ def create_binary_star_system():
         radius=7e8,  # m
         position=[3e11, 0, 0],  # m
         velocity=[0, 2e4, 0],  # m/s
-        color="yellow"
+        color="#FFFF00"  # 黄色
     )
     system.add_body(star1)
     
@@ -549,7 +563,7 @@ def create_binary_star_system():
         radius=5e8,  # m
         position=[-3e11, 0, 0],  # m
         velocity=[0, -3e4, 0],  # m/s
-        color="orange"
+        color="#FFA500"  # オレンジ
     )
     system.add_body(star2)
     
@@ -572,7 +586,7 @@ def create_three_body_system():
         radius=5e8,  # m
         position=[3e11, 0, 0],  # m
         velocity=[0, 2e4, 0],  # m/s
-        color="red"
+        color="#FF0000"  # 赤
     )
     system.add_body(body1)
     
@@ -583,7 +597,7 @@ def create_three_body_system():
         radius=5e8,  # m
         position=[-3e11, 0, 0],  # m
         velocity=[0, -2e4, 0],  # m/s
-        color="blue"
+        color="#0000FF"  # 青
     )
     system.add_body(body2)
     
@@ -594,7 +608,7 @@ def create_three_body_system():
         radius=3e8,  # m
         position=[0, 4e11, 0],  # m
         velocity=[-1.5e4, 0, 0],  # m/s
-        color="green"
+        color="#00FF00"  # 緑
     )
     system.add_body(body3)
     
@@ -789,6 +803,7 @@ def main():
                 new_name = st.text_input('名前', value=body.name, key=f'name_{i}')
                 new_mass = st.number_input('質量 (kg)', value=float(body.mass), format='%e', key=f'mass_{i}')
                 new_radius = st.number_input('半径 (m)', value=float(body.radius), format='%e', key=f'radius_{i}')
+                # 色選択をHEX形式に統一
                 new_color = st.color_picker('色', value=body.color, key=f'color_{i}')
             
             with col2:
@@ -828,6 +843,7 @@ def main():
             new_name = st.text_input('名前', value='新しい天体')
             new_mass = st.number_input('質量 (kg)', value=1.0e24, format='%e')
             new_radius = st.number_input('半径 (m)', value=6.0e6, format='%e')
+            # 色選択をHEX形式に統一
             new_color = st.color_picker('色', value='#00FF00')
         
         with col2:
