@@ -134,11 +134,15 @@ class PhysicsEngine:
         
         # Update velocity for all bodies by half step
         for body in bodies:
-            body.velocity += 0.5 * body.acceleration * self.dt
+            # Ensure all calculations are done with float64
+            half_step = 0.5 * body.acceleration * self.dt
+            body.velocity = body.velocity + half_step  # Explicit addition to avoid type issues
         
         # Update position for all bodies by full step
         for body in bodies:
-            body.position += body.velocity * self.dt
+            # Ensure all calculations are done with float64
+            position_step = body.velocity * self.dt
+            body.position = body.position + position_step  # Explicit addition to avoid type issues
             body.update_trajectory()
         
         # Calculate new acceleration
@@ -146,7 +150,9 @@ class PhysicsEngine:
         
         # Update velocity for all bodies by remaining half step
         for body in bodies:
-            body.velocity += 0.5 * body.acceleration * self.dt
+            # Ensure all calculations are done with float64
+            half_step = 0.5 * body.acceleration * self.dt
+            body.velocity = body.velocity + half_step  # Explicit addition to avoid type issues
             
     def reset(self):
         """Reset physics engine parameters to initial state"""
@@ -632,14 +638,18 @@ def create_animation_gif(simulation_controller, visualizer, frames=100, interval
     simulation_controller.reset()
     simulation_controller.start()
     
+    # Create a deep copy of the simulation controller to avoid modifying the original
+    import copy
+    sim_copy = copy.deepcopy(simulation_controller)
+    
     # List to store frames
     frame_images = []
     
     try:
         # Generate each frame
-        for _ in range(frames):
+        for _ in range(int(frames)):
             # Advance simulation one step
-            simulation_controller.step()
+            sim_copy.step()
             
             # Update visualization
             visualizer.update()
@@ -660,7 +670,7 @@ def create_animation_gif(simulation_controller, visualizer, frames=100, interval
             format='GIF', 
             save_all=True, 
             append_images=frame_images[1:], 
-            duration=interval, 
+            duration=int(interval), 
             loop=0
         )
         gif_buf.seek(0)
@@ -947,9 +957,6 @@ def main():
             else:
                 st.session_state.is_running = False
                 st.session_state.simulation_controller.pause()
-    
-    # Deployment instructions
-    st.subheader('Deployment to Streamlit Cloud')
     
     # Footer
     st.markdown('---')
