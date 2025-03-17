@@ -680,9 +680,9 @@ def create_animation_frames(simulation_controller, visualizer, frames=100):
         st.error(f"Error creating animation frames: {str(e)}")
         return None
 
-# Main part of Streamlit app
-def main():
-    # Initialize session state
+# Initialize session state variables
+def init_session_state():
+    """Initialize all session state variables"""
     if 'celestial_system' not in st.session_state:
         st.session_state.celestial_system = create_solar_system()
     
@@ -717,8 +717,53 @@ def main():
     if 'last_frame_time' not in st.session_state:
         st.session_state.last_frame_time = time.time()
         
-    if 'animation_speed' not in st.session_state:
-        st.session_state.animation_speed = 200  # milliseconds between frames
+    if 'anim_speed' not in st.session_state:
+        st.session_state.anim_speed = 200  # milliseconds between frames
+        
+    if 'frame_count' not in st.session_state:
+        st.session_state.frame_count = 100
+
+# Callback functions for animation control
+def play_animation():
+    """Start animation playback"""
+    st.session_state.animation_playing = True
+    st.session_state.last_frame_time = time.time()
+
+def pause_animation():
+    """Pause animation playback"""
+    st.session_state.animation_playing = False
+
+def prev_frame():
+    """Go to previous frame"""
+    st.session_state.animation_playing = False
+    st.session_state.current_frame = max(0, st.session_state.current_frame - 1)
+
+def next_frame():
+    """Go to next frame"""
+    st.session_state.animation_playing = False
+    if st.session_state.animation_frames:
+        st.session_state.current_frame = min(
+            len(st.session_state.animation_frames) - 1, 
+            st.session_state.current_frame + 1
+        )
+
+def update_frame(frame_idx):
+    """Update current frame index"""
+    st.session_state.current_frame = frame_idx
+    st.session_state.animation_playing = False
+
+def update_anim_speed(speed):
+    """Update animation speed"""
+    st.session_state.anim_speed = speed
+
+def update_frame_count(count):
+    """Update frame count"""
+    st.session_state.frame_count = count
+
+# Main part of Streamlit app
+def main():
+    # Initialize session state
+    init_session_state()
     
     # Scenario selection
     scenario = st.sidebar.radio(
@@ -940,15 +985,27 @@ def main():
     col1, col2 = st.columns(2)
     
     with col1:
-        frames = st.number_input('Number of Frames', min_value=10, max_value=500, value=100, key='frames')
+        # Use callback to update session state
+        frames = st.number_input(
+            'Number of Frames', 
+            min_value=10, 
+            max_value=500, 
+            value=st.session_state.frame_count,
+            key='frame_count_input',
+            on_change=update_frame_count,
+            args=(st.session_state.get('frame_count_input', 100),)
+        )
     
     with col2:
-        st.session_state.animation_speed = st.number_input(
+        # Use callback to update session state
+        anim_speed = st.number_input(
             'Animation Speed (ms)', 
             min_value=50, 
             max_value=1000, 
-            value=st.session_state.animation_speed,
-            key='animation_speed'
+            value=st.session_state.anim_speed,
+            key='anim_speed_input',
+            on_change=update_anim_speed,
+            args=(st.session_state.get('anim_speed_input', 200),)
         )
     
     # Generate animation button
@@ -961,7 +1018,7 @@ def main():
             st.session_state.animation_frames = create_animation_frames(
                 st.session_state.simulation_controller,
                 st.session_state.visualizer,
-                frames=int(frames)
+                frames=st.session_state.frame_count
             )
             
             # Reset current frame
@@ -988,38 +1045,34 @@ def main():
         
         # Previous frame button
         with anim_col1:
-            if st.button("◀", key="prev_frame"):
-                st.session_state.animation_playing = False
-                st.session_state.current_frame = max(0, st.session_state.current_frame - 1)
+            if st.button("◀", key="prev_frame", on_click=prev_frame):
+                pass  # Action handled by callback
         
         # Play/Pause button
         with anim_col2:
             if st.session_state.animation_playing:
-                if st.button("⏸", key="pause_animation"):
-                    st.session_state.animation_playing = False
+                if st.button("⏸", key="pause_animation", on_click=pause_animation):
+                    pass  # Action handled by callback
             else:
-                if st.button("▶", key="play_animation"):
-                    st.session_state.animation_playing = True
-                    st.session_state.last_frame_time = time.time()
+                if st.button("▶", key="play_animation", on_click=play_animation):
+                    pass  # Action handled by callback
         
         # Frame slider
         with anim_col3:
-            new_frame = st.slider(
+            st.slider(
                 "Frame", 
                 min_value=0, 
                 max_value=len(st.session_state.animation_frames) - 1, 
                 value=st.session_state.current_frame,
-                key="frame_slider"
+                key="frame_slider",
+                on_change=update_frame,
+                args=(st.session_state.get('frame_slider', 0),)
             )
-            if new_frame != st.session_state.current_frame:
-                st.session_state.current_frame = new_frame
-                st.session_state.animation_playing = False
         
         # Next frame button
         with anim_col4:
-            if st.button("▶", key="next_frame"):
-                st.session_state.animation_playing = False
-                st.session_state.current_frame = min(len(st.session_state.animation_frames) - 1, st.session_state.current_frame + 1)
+            if st.button("▶", key="next_frame", on_click=next_frame):
+                pass  # Action handled by callback
         
         # Display current frame
         with animation_container:
@@ -1035,7 +1088,7 @@ def main():
             current_time = time.time()
             elapsed_ms = (current_time - st.session_state.last_frame_time) * 1000
             
-            if elapsed_ms >= st.session_state.animation_speed:
+            if elapsed_ms >= st.session_state.anim_speed:
                 st.session_state.current_frame = (st.session_state.current_frame + 1) % len(st.session_state.animation_frames)
                 st.session_state.last_frame_time = current_time
                 st.experimental_rerun()
@@ -1054,7 +1107,7 @@ def main():
                         format='GIF', 
                         save_all=True, 
                         append_images=pil_images[1:], 
-                        duration=st.session_state.animation_speed, 
+                        duration=st.session_state.anim_speed, 
                         loop=0
                     )
                     gif_buf.seek(0)
