@@ -840,25 +840,25 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            new_name = st.text_input('名前', value='新しい天体')
-            new_mass = st.number_input('質量 (kg)', value=1.0e24, format='%e')
-            new_radius = st.number_input('半径 (m)', value=6.0e6, format='%e')
+            new_name = st.text_input('名前', value='新しい天体', key='new_name')
+            new_mass = st.number_input('質量 (kg)', value=1.0e24, format='%e', key='new_mass')
+            new_radius = st.number_input('半径 (m)', value=6.0e6, format='%e', key='new_radius')
             # 色選択をHEX形式に統一
-            new_color = st.color_picker('色', value='#00FF00')
+            new_color = st.color_picker('色', value='#00FF00', key='new_color')
         
         with col2:
             st.write('位置 (m)')
-            new_pos_x = st.number_input('X', value=2.0e11, format='%e')
-            new_pos_y = st.number_input('Y', value=0.0, format='%e')
-            new_pos_z = st.number_input('Z', value=0.0, format='%e')
+            new_pos_x = st.number_input('X', value=2.0e11, format='%e', key='new_pos_x')
+            new_pos_y = st.number_input('Y', value=0.0, format='%e', key='new_pos_y')
+            new_pos_z = st.number_input('Z', value=0.0, format='%e', key='new_pos_z')
             
             st.write('速度 (m/s)')
-            new_vel_x = st.number_input('X', value=0.0, format='%e')
-            new_vel_y = st.number_input('Y', value=2.0e4, format='%e')
-            new_vel_z = st.number_input('Z', value=0.0, format='%e')
+            new_vel_x = st.number_input('X', value=0.0, format='%e', key='new_vel_x')
+            new_vel_y = st.number_input('Y', value=2.0e4, format='%e', key='new_vel_y')
+            new_vel_z = st.number_input('Z', value=0.0, format='%e', key='new_vel_z')
         
         # 追加ボタン
-        if st.button('追加'):
+        if st.button('追加', key='add_new_body'):
             # 同名の天体がないか確認
             if any(body.name == new_name for body in st.session_state.celestial_system.bodies):
                 st.error(f'"{new_name}" という名前の天体は既に存在します。')
@@ -899,12 +899,12 @@ def main():
     col1, col2 = st.columns(2)
     
     with col1:
-        frames = st.number_input('フレーム数', min_value=10, max_value=500, value=100)
+        frames = st.number_input('フレーム数', min_value=10, max_value=500, value=100, key='gif_frames')
     
     with col2:
-        interval = st.number_input('フレーム間隔 (ミリ秒)', min_value=10, max_value=500, value=50)
+        interval = st.number_input('フレーム間隔 (ミリ秒)', min_value=10, max_value=500, value=50, key='gif_interval')
     
-    if st.button('アニメーションGIFを生成'):
+    if st.button('アニメーションGIFを生成', key='generate_gif'):
         with st.spinner('アニメーションを生成中...'):
             # 現在の状態を保存
             current_running = st.session_state.is_running
@@ -931,7 +931,8 @@ def main():
                 label="GIFをダウンロード",
                 data=gif_data,
                 file_name="celestial_simulation.gif",
-                mime="image/gif"
+                mime="image/gif",
+                key='download_gif'
             )
             
             # 元の状態に戻す
@@ -952,10 +953,10 @@ def main():
     2. このコードを `app.py` として保存し、リポジトリにアップロードします。
     3. `requirements.txt` ファイルを作成し、以下の内容を記述します：
        ```
-       streamlit
-       numpy
-       matplotlib
-       pillow
+       streamlit>=1.22.0
+       numpy>=1.22.0
+       matplotlib>=3.5.0
+       pillow>=9.0.0
        ```
     4. [Streamlit Cloud](https://streamlit.io/cloud) にアクセスし、GitHubアカウントでログインします。
     5. 「New app」をクリックし、作成したリポジトリを選択します。
