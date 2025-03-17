@@ -9,7 +9,6 @@ import base64
 from PIL import Image
 import time
 import copy
-import html
 
 # Title and introduction
 st.title('Celestial Body Simulator')
@@ -622,19 +621,18 @@ def create_three_body_system():
     
     return system
 
-# Function to create interactive HTML5 animation
-def create_interactive_animation(simulation_controller, visualizer, frames=100, interval=50):
+# Function to create animation frames
+def create_animation_frames(simulation_controller, visualizer, frames=100):
     """
-    Create interactive HTML5 animation
+    Create animation frames
     
     Parameters:
     simulation_controller (SimulationController): Simulation control object
     visualizer (Visualizer): Visualization object
     frames (int): Number of animation frames
-    interval (int): Time between frames (milliseconds)
     
     Returns:
-    str: HTML code for interactive animation
+    list: List of image frames
     """
     # Create a deep copy of the simulation controller to avoid modifying the original
     sim_copy = copy.deepcopy(simulation_controller)
@@ -658,80 +656,13 @@ def create_interactive_animation(simulation_controller, visualizer, frames=100, 
             visualizer.fig.savefig(buf, format='png', dpi=80)
             buf.seek(0)
             
-            # Convert to base64
-            img_str = base64.b64encode(buf.read()).decode()
-            frame_images.append(img_str)
+            # Convert to PIL Image
+            img = Image.open(buf)
+            frame_images.append(img)
         
-        # Create HTML5 animation
-        html_animation = f"""
-        <div id="animation-container" style="width:100%; margin:0 auto;">
-            <img id="animation-frame" src="data:image/png;base64,{frame_images[0]}" style="width:100%; max-width:800px; display:block; margin:0 auto;">
-            <div style="width:100%; max-width:800px; margin:10px auto;">
-                <input type="range" id="animation-slider" min="0" max="{len(frame_images)-1}" value="0" style="width:80%; margin:0 auto; display:block;">
-                <div style="display:flex; justify-content:space-between; width:80%; margin:0 auto;">
-                    <button id="animation-play" style="margin:5px;">Play</button>
-                    <button id="animation-pause" style="margin:5px;">Pause</button>
-                    <span id="frame-counter">Frame: 0/{len(frame_images)-1}</span>
-                </div>
-            </div>
-        </div>
-        <script>
-            // Animation frames
-            const frames = {frame_images};
-            let currentFrame = 0;
-            let isPlaying = false;
-            let animationInterval;
-            
-            // DOM elements
-            const frameElement = document.getElementById('animation-frame');
-            const sliderElement = document.getElementById('animation-slider');
-            const playButton = document.getElementById('animation-play');
-            const pauseButton = document.getElementById('animation-pause');
-            const frameCounter = document.getElementById('frame-counter');
-            
-            // Update frame
-            function updateFrame(index) {{
-                frameElement.src = 'data:image/png;base64,' + frames[index];
-                sliderElement.value = index;
-                frameCounter.textContent = `Frame: ${{index}}/${{frames.length-1}}`;
-                currentFrame = index;
-            }}
-            
-            // Play animation
-            function playAnimation() {{
-                if (!isPlaying) {{
-                    isPlaying = true;
-                    animationInterval = setInterval(() => {{
-                        currentFrame = (currentFrame + 1) % frames.length;
-                        updateFrame(currentFrame);
-                    }}, {interval});
-                }}
-            }}
-            
-            // Pause animation
-            function pauseAnimation() {{
-                if (isPlaying) {{
-                    isPlaying = false;
-                    clearInterval(animationInterval);
-                }}
-            }}
-            
-            // Event listeners
-            playButton.addEventListener('click', playAnimation);
-            pauseButton.addEventListener('click', pauseAnimation);
-            sliderElement.addEventListener('input', function() {{
-                pauseAnimation();
-                updateFrame(parseInt(this.value));
-            }});
-            
-            // Initialize
-            updateFrame(0);
-        </script>
-        """
-        
-        return html_animation
+        return frame_images
     except Exception as e:
-        st.error(f"Error creating animation: {str(e)}")
+        st.error(f"Error creating animation frames: {str(e)}")
         return None
 
 # Main part of Streamlit app
@@ -758,6 +689,12 @@ def main():
     
     if 'current_scenario' not in st.session_state:
         st.session_state.current_scenario = 'solar_system'
+        
+    if 'animation_frames' not in st.session_state:
+        st.session_state.animation_frames = None
+        
+    if 'current_frame' not in st.session_state:
+        st.session_state.current_frame = 0
     
     # Scenario selection
     scenario = st.sidebar.radio(
@@ -795,6 +732,10 @@ def main():
             st.session_state.celestial_system
         )
         st.session_state.visualizer.celestial_system = st.session_state.celestial_system
+        
+        # Reset animation frames
+        st.session_state.animation_frames = None
+        st.session_state.current_frame = 0
         
         # Update current scenario
         st.session_state.current_scenario = scenario_map[scenario]
@@ -853,6 +794,9 @@ def main():
         if st.button('Reset', key='reset_button'):
             st.session_state.is_running = False
             st.session_state.simulation_controller.reset()
+            # Reset animation frames
+            st.session_state.animation_frames = None
+            st.session_state.current_frame = 0
     
     # Body parameters display and editing
     st.subheader('Body Parameters')
@@ -961,35 +905,32 @@ def main():
     # Display figure
     simulation_placeholder.pyplot(st.session_state.visualizer.fig)
     
-    # Interactive Animation Generation
-    st.subheader('Generate Interactive Animation')
+    # Animation Generation
+    st.subheader('Generate Animation')
     
     col1, col2 = st.columns(2)
     
     with col1:
-        frames = st.number_input('Number of Frames', min_value=10, max_value=500, value=100, key='gif_frames')
+        frames = st.number_input('Number of Frames', min_value=10, max_value=500, value=100, key='frames')
     
     with col2:
-        interval = st.number_input('Frame Interval (ms)', min_value=10, max_value=500, value=50, key='gif_interval')
+        interval = st.number_input('Frame Interval (ms)', min_value=10, max_value=500, value=50, key='interval')
     
-    if st.button('Generate Interactive Animation', key='generate_animation'):
-        with st.spinner('Generating interactive animation...'):
+    # Generate animation button
+    if st.button('Generate Animation', key='generate_animation'):
+        with st.spinner('Generating animation...'):
             # Save current state
             current_running = st.session_state.is_running
             
-            # Generate animation
-            html_animation = create_interactive_animation(
+            # Generate animation frames
+            st.session_state.animation_frames = create_animation_frames(
                 st.session_state.simulation_controller,
                 st.session_state.visualizer,
-                frames=int(frames),
-                interval=int(interval)
+                frames=int(frames)
             )
             
-            if html_animation:
-                # Display interactive animation
-                st.subheader("Interactive Animation")
-                st.markdown("Use the slider to scrub through frames or play/pause to control animation:")
-                st.components.v1.html(html_animation, height=600)
+            # Reset current frame
+            st.session_state.current_frame = 0
             
             # Restore original state
             if current_running:
@@ -998,6 +939,60 @@ def main():
             else:
                 st.session_state.is_running = False
                 st.session_state.simulation_controller.pause()
+    
+    # Display animation if frames exist
+    if st.session_state.animation_frames:
+        st.subheader("Animation Player")
+        
+        # Create columns for animation controls
+        anim_col1, anim_col2, anim_col3 = st.columns([1, 6, 1])
+        
+        # Play/Pause buttons
+        with anim_col1:
+            if st.button("◀", key="prev_frame"):
+                st.session_state.current_frame = max(0, st.session_state.current_frame - 1)
+        
+        # Frame slider
+        with anim_col2:
+            st.session_state.current_frame = st.slider(
+                "Frame", 
+                min_value=0, 
+                max_value=len(st.session_state.animation_frames) - 1, 
+                value=st.session_state.current_frame,
+                key="frame_slider"
+            )
+        
+        # Next frame button
+        with anim_col3:
+            if st.button("▶", key="next_frame"):
+                st.session_state.current_frame = min(len(st.session_state.animation_frames) - 1, st.session_state.current_frame + 1)
+        
+        # Display current frame
+        st.image(st.session_state.animation_frames[st.session_state.current_frame], use_column_width=True)
+        
+        # Create a GIF from frames
+        if st.button("Create Downloadable GIF", key="create_gif"):
+            with st.spinner("Creating GIF..."):
+                # Create GIF
+                gif_buf = io.BytesIO()
+                st.session_state.animation_frames[0].save(
+                    gif_buf, 
+                    format='GIF', 
+                    save_all=True, 
+                    append_images=st.session_state.animation_frames[1:], 
+                    duration=int(interval), 
+                    loop=0
+                )
+                gif_buf.seek(0)
+                
+                # Provide download button
+                st.download_button(
+                    label="Download GIF",
+                    data=gif_buf,
+                    file_name="celestial_simulation.gif",
+                    mime="image/gif",
+                    key='download_gif'
+                )
     
     # Footer
     st.markdown('---')
